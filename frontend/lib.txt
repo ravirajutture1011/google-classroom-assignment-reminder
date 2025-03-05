@@ -1,0 +1,3 @@
+npm i axios react-dom react-hot-toast react-router-dom recharts zustand
+
+https://v3.tailwindcss.com/docs/guides/vite
