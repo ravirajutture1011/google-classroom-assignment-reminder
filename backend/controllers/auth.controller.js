@@ -71,7 +71,7 @@ export const googleCallback = async (req, res) => {
         redirect_uri: process.env.GOOGLE_REDIRECT_URI,
       }
     );
-    const { access_token, refresh_token, id_token } = tokenResponse.data;
+    let { access_token, refresh_token, id_token } = tokenResponse.data;
     console.log("access_token  : ", access_token);
     console.log("refresh_token : ", refresh_token);
 
@@ -84,16 +84,14 @@ export const googleCallback = async (req, res) => {
         headers: { Authorization: `Bearer ${access_token}` },
       }
     );
+
     const userInfo = userInfoResponse.data;
     console.log("User info : ", userInfo); // Display User Information
     const {id,email,name} = userInfo
 
-
-
-
-
     // store tokens in db or use them for further api calls
     const userExists = await User.findOne({email})
+    
     if(userExists) {
       //update access token
       userExists.accessToken = access_token;
@@ -112,21 +110,28 @@ export const googleCallback = async (req, res) => {
     }
 
 
-
     //store refresh token in redis 
     // todo: handle edge cases 
-    
-
-
-
-
-
-
-
-
-
-
-
+    if(!access_token) {
+      const redis_refresh_token = await redis.get(`refreshToken : ${id}`);
+      if(redis_refresh_token) {
+        const tokenResponse = await axios.post(
+          "https://oauth2.googleapis.com/token",
+          {
+            client_id: process.env.GOOGLE_CLIENT_ID,
+            client_secret: process.env.GOOGLE_CLIENT_SECRET,
+            refresh_token: redis_refresh_token,
+            grant_type: "refresh_token",
+            redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+          }
+        );
+        access_token = tokenResponse.data.access_token;
+        refresh_token = tokenResponse.data.refresh_token || redis_refresh_token;
+      }
+      else{
+        return res.status(401).json({ message: "Refresh token not found" }); 
+      }
+    }
 
     if(refresh_token){
       await storeRefreshToken(id,refresh_token);
