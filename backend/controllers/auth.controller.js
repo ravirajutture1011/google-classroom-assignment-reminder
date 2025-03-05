@@ -1,0 +1,145 @@
+import User from "../models/user.model.js";
+import { googleAuthConfig } from "../lib/googleAuth.js";
+import redis from  "../lib/redis.js" //import redis to save refresh token
+
+import axios from "axios"
+
+export const login = async (req, res) => {
+  try {
+    const { name, password } = req.body;
+    const user = await User.create({ name: name, password: password });
+    res.status(200).json({
+      data: user,
+      message: "User created successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// function for storing refresh token in redis
+const storeRefreshToken = async(googleId,refreshToken)=>{
+    await redis.set(`refreshToken : ${googleId}` , refreshToken , "EX" , 7*24*60*60) // 7 days
+}
+const setCookies = (res, accessToken, refreshToken) => {
+  res.cookie("accessToken", accessToken, {
+      httpOnly: true, // prevent XSS attacks, cross site scripting attack
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict", // prevents CSRF attack, cross-site request forgery attack
+      maxAge: 15 * 60 * 1000, // 15 minutes
+  });
+  res.cookie("refreshToken", refreshToken, {
+      httpOnly: true, // prevent XSS attacks, cross site scripting attack
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict", // prevents CSRF attack, cross-site request forgery attack
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+};
+
+// this is for googl api
+export const getGoogleAuthURL = (req, res) => {
+  const authParams = new URLSearchParams({
+    client_id: googleAuthConfig.clientID,
+    redirect_uri: googleAuthConfig.redirectURI,
+    response_type: "code",
+    scope: googleAuthConfig.scope.join(" "), 
+    access_type: "offline", //to get refresh token
+    prompt: "consent",
+  });
+  const authURL = `https://accounts.google.com/o/oauth2/auth?${authParams.toString()}`;
+  res.redirect(authURL);
+};
+
+export const googleCallback = async (req, res) => {
+  try {
+    const { code } = req.query; // Step 2: Get Auth Code from Google
+    if (!code) {
+      return res.status(400).json({ error: "Authorization code not received" });
+    }
+    console.log("Authorization code  : ", code);
+
+    // res.json({ authorizationCode: code });  // Return the Auth Code (Next step: Exchange it for tokens)
+
+    // Exchange code for access & refresh tokens
+    const tokenResponse = await axios.post(
+      "https://oauth2.googleapis.com/token",
+      {
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+      }
+    );
+    const { access_token, refresh_token, id_token } = tokenResponse.data;
+    console.log("access_token  : ", access_token);
+    console.log("refresh_token : ", refresh_token);
+
+
+
+    //get user information 
+    const userInfoResponse = await axios.get(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }
+    );
+    const userInfo = userInfoResponse.data;
+    console.log("User info : ", userInfo); // Display User Information
+    const {id,email,name} = userInfo
+
+
+
+
+
+    // store tokens in db or use them for further api calls
+    const userExists = await User.findOne({email})
+    if(userExists) {
+      //update access token
+      userExists.accessToken = access_token;
+      await userExists.save();
+    }
+    else{
+      //create new user
+      const newUser = new User({
+        googleId : id,
+        name,
+        email,
+        accessToken: access_token,
+      });
+
+      await newUser.save();
+    }
+
+
+
+    //store refresh token in redis 
+    // todo: handle edge cases 
+    
+
+
+
+
+
+
+
+
+
+
+
+
+    if(refresh_token){
+      await storeRefreshToken(id,refresh_token);
+    }
+  
+    // Set cookies with access token
+    setCookies(res, access_token, refresh_token);
+
+    res.json({
+      message: "login success!!"
+    });
+  } catch (error) {
+    console.error("error in googleCallback",error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
