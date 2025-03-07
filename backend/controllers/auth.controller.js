@@ -21,6 +21,7 @@ export const login = async (req, res) => {
 const storeRefreshToken = async(googleId,refreshToken)=>{
     await redis.set(`refreshToken : ${googleId}` , refreshToken , "EX" , 7*24*60*60) // 7 days
 }
+
 const setCookies = (res, accessToken, refreshToken) => {
   res.cookie("accessToken", accessToken, {
       httpOnly: true, // prevent XSS attacks, cross site scripting attack
@@ -140,11 +141,35 @@ export const googleCallback = async (req, res) => {
     // Set cookies with access token
     setCookies(res, access_token, refresh_token);
 
-    res.json({
-      message: "login success!!"
-    });
+    // res.json({
+    //   message: "login success!!",
+    // });
+    res.redirect(`http://localhost:5173/dashboard?login=success`);
+
   } catch (error) {
     console.error("error in googleCallback",error.message);
     res.status(500).json({ message: error.message });
   }
 };
+
+export const getUserInfo = async(req,res)=>{
+  try{
+    const { accessToken } = req.cookies;
+    // console.log("Printing access token in getuserinfo",accessToken);
+    if(!accessToken){
+      return res.status(401).json({ message: "Access token not found" });
+    }
+    const userInfoResponse = await axios.get(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    res.json(userInfoResponse.data);
+  }
+  catch(e){
+    console.log("error in getUserInfo",e.message);
+    res.status(500).json({error:e.message});
+  }
+}
