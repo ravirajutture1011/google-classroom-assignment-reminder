@@ -202,20 +202,23 @@ export const getRecentAnnouncements = async (req, res) => {
             return res.status(401).json({ message: "Access token missing" });
         }
 
-        // Step 1: Get all courses
-        const coursesResponse = await axios.get(
-            "https://classroom.googleapis.com/v1/courses",
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
+        //retirve from mongodb
+        const googleId = "109540576940320069518"
 
-        // const courses = [756342542107,755271073984,751532899344,738459157566,738349145534,742470210990,]
-        const courses = coursesResponse.data.courses || [];
+        const mongo_cources = await Course.findOne({googleId : googleId})
 
+        const courseArray = mongo_cources.courses;
+        const courseIDs =[]
+
+        for(let course of courseArray){
+            courseIDs.push(course.courseId);
+        }
+        
         // Step 2: Fetch latest announcement for each course in parallel
-        const announcementsPromises = courses.map(async (course) => {
+        const announcementsPromises = courseIDs.map(async (course) => {
             try {
                 const announcementResponse = await axios.get(
-                    `https://classroom.googleapis.com/v1/courses/${course.id}/announcements`,
+                    `https://classroom.googleapis.com/v1/courses/${course}/announcements`,
                     {
                         headers: { Authorization: `Bearer ${accessToken}` },
                         params: { orderBy: "updateTime desc", pageSize: 5 },
@@ -269,6 +272,8 @@ export const getRecentAnnouncements = async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 };
+
+
 
 export const getStudentCources = async (req,res)=>{
     try{
