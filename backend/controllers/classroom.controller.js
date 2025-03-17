@@ -35,7 +35,6 @@ export const getCourseList = async(req,res)=>{
     }
 }
 
-
 export const selectedCourses = async (req, res) => {
     try {
         const { googleId, selectedCourses } = req.body;
@@ -86,13 +85,9 @@ export const selectedCourses = async (req, res) => {
     }
 };
 
-
-
-
-
 export const getCourseAssignmentList = async (req, res) => {
     try {
-        console.log("Request received in backend...");
+        // console.log("Request received in backend...");
         const accessToken = req.cookies.accessToken;
 
         if (!accessToken) {
@@ -112,7 +107,6 @@ export const getCourseAssignmentList = async (req, res) => {
 
         const courseWork = response.data.courseWork || [];
 
-        // ✅ If there are no assignments, return a success response with an empty list
         if (courseWork.length === 0) {
             return res.status(200).json({ assignments: [], message: "No assignments found for this course." });
         }
@@ -125,7 +119,7 @@ export const getCourseAssignmentList = async (req, res) => {
             updateTime : courseWork.updateTime.substring(0,10) || "",
             dueTime : courseWork.dueTime || "",
         }));
-        console.log(response.data.courseWork)
+        // console.log(response.data.courseWork)
 
         res.status(200).json({ assignments: result });
     } catch (e) {
@@ -133,7 +127,6 @@ export const getCourseAssignmentList = async (req, res) => {
         res.status(500).json({ error: "Internal Server Error" });
     }
 };
-
 
 export const getAllAssignments = async(req,res)=>{
     try{
@@ -213,7 +206,7 @@ export const getRecentAnnouncements = async (req, res) => {
         for(let course of courseArray){
             courseIDs.push(course.courseId);
         }
-        
+
         // Step 2: Fetch latest announcement for each course in parallel
         const announcementsPromises = courseIDs.map(async (course) => {
             try {
@@ -273,8 +266,6 @@ export const getRecentAnnouncements = async (req, res) => {
     }
 };
 
-
-
 export const getStudentCources = async (req,res)=>{
     try{
         const {id} = req.params;
@@ -287,5 +278,37 @@ export const getStudentCources = async (req,res)=>{
         res.status(500).json({error:e.message});
     }
 }
+
+export const deleteCourse = async(req,res)=>{
+    try{
+        const {id,courseId} = req.params;
+
+        const googleId = id ;
+        console.log("reveived google id" , googleId);
+        console.log("reveived course id" ,courseId);
+        const course = await Course.updateOne(
+            { googleId: googleId },
+            { $pull: { courses: { courseId: courseId } } }
+          );
+        if(!course){
+            return res.status(404).json({ message: "Course not found" });
+        }
+        res.json({ message: "Course deleted successfully" });
+        res.send("deleted course route hit")
+    }
+    catch(e){
+        console.log("error in delteCourse");
+        res.status(500).json({error:e.message});
+    }
+}
+
+
+export const testController = async(req,res)=>{
+    const {id} = req.params;
+    console.log("received id",id);
+    console.log("testController");
+    res.json({ message: `test controller ${id}`  });
+}
+ 
 
  
