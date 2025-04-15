@@ -11,7 +11,7 @@ const DashboardPage = () => {
 
   useEffect(() => {
     getAllCources();
-    // userInfo();
+    userInfo();
   }, []);
 
   // console.log("Printing user information ... in dashboard...",user);
