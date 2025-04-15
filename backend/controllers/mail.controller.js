@@ -17,6 +17,7 @@ export const sendTestEmail = async(req,res)=>{
 
     }
 }
+
 export const sendDueDateReminders = async(req,res)=>{
     try {
         const users = await User.find(); // Get all users

@@ -4,18 +4,7 @@ import redis from  "../lib/redis.js" //import redis to save refresh token
 
 import axios from "axios"
 
-export const login = async (req, res) => {
-  try {
-    const { name, password } = req.body;
-    const user = await User.create({ name: name, password: password });
-    res.status(200).json({
-      data: user,
-      message: "User created successfully",
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+ 
 
 // function for storing refresh token in redis
 const storeRefreshToken = async(googleId,refreshToken)=>{
@@ -57,7 +46,7 @@ export const googleCallback = async (req, res) => {
     if (!code) {
       return res.status(400).json({ error: "Authorization code not received" });
     }
-    console.log("Authorization code  : ", code);
+    // console.log("Authorization code  : ", code);
 
     // res.json({ authorizationCode: code });  // Return the Auth Code (Next step: Exchange it for tokens)
 
@@ -73,8 +62,8 @@ export const googleCallback = async (req, res) => {
       }
     );
     let { access_token, refresh_token, id_token } = tokenResponse.data;
-    console.log("access_token  : ", access_token);
-    console.log("refresh_token : ", refresh_token);
+    // console.log("access_token  : ", access_token);
+    // console.log("refresh_token : ", refresh_token);
 
 
 
@@ -87,7 +76,7 @@ export const googleCallback = async (req, res) => {
     );
 
     const userInfo = userInfoResponse.data;
-    console.log("User info : ", userInfo); // Display User Information
+    // console.log("User info : ", userInfo); // Display User Information
     const {id,email,name} = userInfo
 
     // store tokens in db or use them for further api calls
@@ -155,7 +144,7 @@ export const googleCallback = async (req, res) => {
 export const getUserInfo = async(req,res)=>{
   try{
     const { accessToken } = req.cookies;
-    // console.log("Printing access token in getuserinfo",accessToken);
+    console.log("Printing access token in getuserinfo",accessToken);
     if(!accessToken){
       return res.status(401).json({ message: "Access token not found" });
     }
@@ -171,5 +160,57 @@ export const getUserInfo = async(req,res)=>{
   catch(e){
     console.log("error in getUserInfo",e.message);
     res.status(500).json({error:e.message});
+  }
+};
+
+export const logout = async (req,res)=>{
+  try{
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+    res.json({ message: "logout success" });
+  }
+  catch(e){
+    console.log("error in logout",e.message);
+    res.status(500).json({error:e.message});
+  }
+};
+
+export const refreshAccessToken = async (req,res)=>{
+  // const {googleId} = req.body;
+  try{
+  const googleId = "109540576940320069518"
+  if(!googleId){
+    return res.status(400).json({ error: "googleId not provided" });
+  }
+  const stored_refresh_token = await redis.get(`refreshToken : ${googleId}`)
+
+
+  const tokenResponse = await axios.post(
+    "https://oauth2.googleapis.com/token",
+    {
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token :stored_refresh_token,
+      grant_type: "refresh_token",
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    }
+  );
+  let { access_token, refresh_token, id_token } = tokenResponse.data; //google returns refresh token only once
+
+  //store access token in cookie
+  if (access_token) {
+    res.cookie("accessToken", access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+  }
+  res.json({message: "Access token created successfully"});
+
+  }
+  catch(error){
+    console.log("error in refreshAccessToken",error.message);
+    res.status(500).json({ message: error.message });
   }
 }

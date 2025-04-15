@@ -1,15 +1,17 @@
 import mongoose from "mongoose";
 
 const assignmentSchema = new mongoose.Schema({
-    googleId: { type: String, required: true }, // Identifies the user
-    courseId: { type: String, required: true }, // Identifies the course
-    assignmentId: { type: String, required:true},
-    title: { type: String, required: true }, 
-    description: { type: String, default: "" }, 
-    assignmentId: { type: String, required: true, unique: true },
-    dueDate: { type: Date, default: null }, // Can be null if no due date is given
-    createdAt: { type: Date, default: Date.now } // Track when assignment was added
+  googleId: { type: String, required: true },
+  courseId: { type: String, required: true },
+  assignmentId: { type: String, required: true }, // only one assignmentId field!
+  title: { type: String, required: true },
+  description: { type: String, default: "" },
+  dueDate: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
 });
+
+// ✅ Compound index: one user can have same assignmentId as others
+assignmentSchema.index({ assignmentId: 1, googleId: 1 }, { unique: true });
 
 const Assignment = mongoose.model("Assignment", assignmentSchema);
 export default Assignment;

@@ -24,9 +24,11 @@ export const getCourseList = async(req,res)=>{
             id: course.id,
             name: course.name,
         }));
+
         res.json({
             data : courses,
         });
+
 
     }
     catch(e){
@@ -128,65 +130,73 @@ export const getCourseAssignmentList = async (req, res) => {
     }
 };
 
-export const getAllAssignments = async(req,res)=>{
-    try{
-        const {id} = req.params;
-        const googleId = id;
-        const courses = await Course.findOne({googleId:id});
-        console.log("courses: ", courses.courses);
-        //got courses array containing bojects
-        //iterate and get only ids of courses 
-        const courseArray = [];
-        for(let c of courses.courses){
-            console.log(c.courseId);
-            courseArray.push(c.courseId);
+  
+
+export const getAllAssignments = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const googleId = id;
+      const courses = await Course.findOne({ googleId: id });
+  
+      if (!courses || !courses.courses) {
+        return res.status(404).json({ message: "No courses found for this user" });
+      }
+  
+      const courseArray = courses.courses.map(c => c.courseId);
+      const accessToken = req.cookies.accessToken;
+  
+      if (!accessToken) {
+        return res.status(401).json({ message: "Access token missing" });
+      }
+  
+      // Step 1: Delete assignments not in courseArray
+      await Assignment.deleteMany({
+        googleId: googleId,
+        courseId: { $nin: courseArray }
+      });
+  
+      // Step 2: Sync assignments for current courses
+      for (let courseId of courseArray) {
+        const response = await axios.get(
+          `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+  
+        const courseWork = response.data.courseWork || [];
+  
+        for (let c of courseWork) {
+          await Assignment.findOneAndUpdate(
+            {
+              assignmentId: c.id,
+              googleId: googleId,
+              courseId: c.courseId,
+            },
+            {
+              googleId: googleId,
+              assignmentId: c.id,
+              courseId: courseId,
+              title: c.title,
+              description: c.description || "No description available",
+              dueDate: c.dueDate ? new Date(`${c.dueDate.year}-${c.dueDate.month}-${c.dueDate.day}`) : null,
+              updateTime: c.updateTime?.substring(0, 10) || "",
+              dueTime: c.dueTime || "",
+            },
+            { upsert: true }
+          );
         }
-        const accessToken = req.cookies.accessToken;
-        console.log("accessToken: ", accessToken);
-        if (!accessToken) {
-            return res.status(401).json({ message: "Access token missing" });
-        }
-        
-            //make api call for each couse assignment
-            let i=0;
-            for(let course of courseArray){
-                 const courseId = course;
-                 const response = await axios.get(
-                    `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork`,
-                    { headers: { Authorization: `Bearer ${accessToken}` } }
-                );
-                const courseWork = response.data.courseWork || [];
-                for(let c of courseWork){
-                    await Assignment.findOneAndUpdate(
-                        {
-                            assignmentId:c.id,
-                            googleId:googleId,
-                            courseId:c.courseId,
-                        },
-                        {
-                            googleId: googleId,
-                            assignmentId: c.id,
-                            courseId: courseId,
-                            title: c.title,
-                            description: c.description || "No description available",
-                            dueDate: c.dueDate ? new Date(`${c.dueDate.year}-${c.dueDate.month}-${c.dueDate.day}`) : null,
-                            updateTime: c.updateTime.substring(0, 10) || "",
-                            dueTime: c.dueTime || "",
-                        },
-                        { upsert: true } // Insert if not found, update if found
-                    )                   
-                }
-                
-            }
-            
-            
-            res.status(200).json({ message: "Assignments synced successfully." });
+      }
+  
+      res.status(200).json({ message: "Assignments synced successfully." });
+    } catch (e) {
+      console.log("Error in getAllAssignments", e.message);
+      res.status(500).json({ error: e.message });
     }
-    catch (e) {
-        console.log("Error in getAllAssignments",e.message);
-        res.status(500).json({error:e.message});
-    }
-}
+  };
+  
+  
+  
+  
+
 
 export const getRecentAnnouncements = async (req, res) => {
     try {
@@ -269,6 +279,7 @@ export const getRecentAnnouncements = async (req, res) => {
 export const getStudentCources = async (req,res)=>{
     try{
         const {id} = req.params;
+    
         const googleId = id ;
         const cources = await Course.find({googleId : googleId});
         res.json({ data: cources });
@@ -294,7 +305,6 @@ export const deleteCourse = async(req,res)=>{
             return res.status(404).json({ message: "Course not found" });
         }
         res.json({ message: "Course deleted successfully" });
-        res.send("deleted course route hit")
     }
     catch(e){
         console.log("error in delteCourse");

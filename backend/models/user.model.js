@@ -23,7 +23,11 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, required: true, unique: true }, // Unique Google ID
     name: { type: String, required: true }, // User's name
     email: { type: String, required: true, unique: true }, // Email (Unique),
-    accessToken: { type: String, required:true}
+    accessToken: { type: String, required:true},
+
+    reminderTimes: { type: [Number], default: [24, 12, 6] }, // Hours before due time
+    reminderFrequency: { type: Number, default: 2 } // How many times to remind
+    
   },
   { timestamps: true } // Auto add createdAt & updatedAt fields
 );
